@@ -71,4 +71,9 @@ Przykładowy payload dla /api/status
   }
 ]
 ```
+### 4. Web App
+Aplikacja stworzona w Vite/React/Typescript.
+Zaimportowono biblioteki @stomp/stompjs & sockjs-client do obsługi WebSocket
+Aplikacja standardowo uruchamia się na localhost:5173
+Jeeli na innym porcie to naley zaktualizować klasy WebConfig i WebSocketConfig w backendzie.
 ## Autorzy
