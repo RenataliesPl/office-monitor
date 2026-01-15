@@ -11,13 +11,16 @@
 #define PIR_PIN        22
 #define REED1_PIN      32   // tylko input
 #define REED2_PIN      33   // tylko input
+#define LED_PIR        21
+#define LED_REED1      19
+#define LED_REED2      18
 
 // ====== KONFIGURACJA SIECI ======
 const char* WIFI_SSID     = "";
 const char* WIFI_PASSWORD = "";
 
 // ====== KONFIGURACJA MQTT ======
-const char* MQTT_BROKER   = "192.168.1.165"; // IP brokera MQTT
+const char* MQTT_BROKER   = "192.168.1.176"; // IP brokera MQTT
 const uint16_t MQTT_PORT  = 1883;
 const char* MQTT_CLIENT_ID = "esp32_1";
 
@@ -33,7 +36,7 @@ DHT dht(DHTPIN, DHTTYPE);
 
 // ====== PARAMETRY CZASOWE ======
 unsigned long lastTempHumPublish = 0;
-const unsigned long TEMP_HUM_INTERVAL_MS = 30000;  // co 30 s
+const unsigned long TEMP_HUM_INTERVAL_MS = 5000;  // co 30 s
 
 // debounce / prosty filtr dla wejść
 unsigned long lastDoor1Change = 0;
@@ -116,6 +119,13 @@ void setup() {
   pinMode(PIR_PIN, INPUT);               // wiekszosc modulow PIR ma wyjscie "HIGH = ruch"
   pinMode(REED1_PIN, INPUT_PULLUP);      // kontaktron do GND
   pinMode(REED2_PIN, INPUT_PULLUP);      // kontaktron do GND
+  pinMode(LED_PIR, OUTPUT);
+  pinMode(LED_REED1, OUTPUT);
+  pinMode(LED_REED2, OUTPUT);
+
+  digitalWrite(LED_PIR, LOW);
+  digitalWrite(LED_REED1, LOW);
+  digitalWrite(LED_REED2, LOW);
 
   dht.begin();
 
@@ -157,6 +167,7 @@ void loop() {
 
   // ====== OBSŁUGA KONTAKTRONU 1 ======
   int door1State = digitalRead(REED1_PIN); // LOW = zamkniety (zwarcie do GND), HIGH = otwarty
+  digitalWrite(LED_REED1, door1State);
   if (door1State != lastDoor1State && (now - lastDoor1Change) > DEBOUNCE_MS) {
     lastDoor1Change = now;
     lastDoor1State = door1State;
@@ -167,6 +178,7 @@ void loop() {
 
   // ====== OBSŁUGA KONTAKTRONU 2 ======
   int door2State = digitalRead(REED2_PIN);
+  digitalWrite(LED_REED2, door2State);
   if (door2State != lastDoor2State && (now - lastDoor2Change) > DEBOUNCE_MS) {
     lastDoor2Change = now;
     lastDoor2State = door2State;
@@ -177,6 +189,7 @@ void loop() {
 
   // ====== OBSŁUGA PIR ======
   int pirState = digitalRead(PIR_PIN); // HIGH = ruch, LOW = brak ruchu (typowo)
+  digitalWrite(LED_PIR, pirState);
   if (pirState != lastPirState && (now - lastPirChange) > DEBOUNCE_MS) {
     lastPirChange = now;
     lastPirState = pirState;
