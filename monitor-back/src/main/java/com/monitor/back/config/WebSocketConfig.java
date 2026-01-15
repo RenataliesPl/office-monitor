@@ -16,10 +16,17 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         config.setApplicationDestinationPrefixes("/app");
     }
 
+//    @Override
+//    public void registerStompEndpoints(StompEndpointRegistry registry) {
+//        registry.addEndpoint("/ws")
+//                .setAllowedOriginPatterns("*")
+//                .withSockJS();
+//    }
+
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns("http://localhost:5173")
                 .withSockJS();
     }
 }
