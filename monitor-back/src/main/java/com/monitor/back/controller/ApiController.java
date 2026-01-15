@@ -5,6 +5,7 @@ import com.monitor.back.entity.Event;
 import com.monitor.back.repository.EventRepository;
 import com.monitor.back.repository.StatusRepository;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
@@ -27,5 +28,10 @@ public class ApiController {
     @GetMapping("/api/events")
     public List<Event> getRecentEvents() {
         return eventRepository.findTop10ByOrderByTimestampDesc();
+    }
+
+    @GetMapping("/api/events/{sensor}")
+    public List<Event> findAllBySensorOrderByTimestampDesc(@PathVariable String sensor) {
+        return eventRepository.findAllBySensorOrderByTimestampDesc(sensor);
     }
 }
