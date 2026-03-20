@@ -32,6 +32,12 @@ export interface EventItem {
     payload?: string;
     timestamp?: string;
 }
+export interface Stats {
+    totalEvents: number;
+    eventsLast24h: number;
+    totalDevices: number;
+    recentEventsCount: number;
+}
 
 type View = "panel" | "events" | "stats" | "admin";
 
@@ -40,6 +46,7 @@ const App: React.FC = () => {
 
     const [statusList, setStatusList] = useState<Status[]>([]);
     const [events, setEvents] = useState<EventItem[]>([]);
+    const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdate, setLastUpdate] = useState<string | null>(null);
@@ -62,16 +69,19 @@ const App: React.FC = () => {
                 setLoading(true);
                 setError(null);
 
-                const [statusRes, eventsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/status`),
-                    fetch(`${API_BASE}/api/events`)
+                const [statusRes, eventsRes, statsRes] = await Promise.all([
+                fetch(`${API_BASE}/api/status`),
+                fetch(`${API_BASE}/api/events`),
+                fetch(`${API_BASE}/api/stats`)
                 ]);
 
                 const statusJson: Status[] = await statusRes.json();
                 const eventsJson: EventItem[] = await eventsRes.json();
+                const statsJson: Stats = await statsRes.json();
 
                 setStatusList(statusJson);
                 setEvents(eventsJson);
+                setStats(statsJson);
                 setLastUpdate(new Date().toLocaleTimeString());
             } catch (e) {
                 if (e instanceof Error) setError(e.message);
@@ -413,7 +423,61 @@ const App: React.FC = () => {
 
                 {view === "panel" && renderDashboard()}
                 {view === "events" && renderEvents()}
-                {view === "stats" && <div className="glass-card">Statystyki</div>}
+                {view === "stats" && (
+    <div className="glass-card">
+        <div className="card-title">Statystyki systemu</div>
+
+        <div className="stats-grid" style={{ marginTop: "20px" }}>
+            <div className="stat-card">
+                <div className="stat-icon">
+                    <Bell size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Wszystkie zdarzenia</div>
+                    <div className="stat-value">
+                        {stats ? stats.totalEvents : "—"}
+                    </div>
+                </div>
+            </div>
+
+            <div className="stat-card">
+                <div className="stat-icon">
+                    <BarChart3 size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Zdarzenia 24h</div>
+                    <div className="stat-value">
+                        {stats ? stats.eventsLast24h : "—"}
+                    </div>
+                </div>
+            </div>
+
+            <div className="stat-card">
+                <div className="stat-icon">
+                    <Activity size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Urządzenia</div>
+                    <div className="stat-value">
+                        {stats ? stats.totalDevices : "—"}
+                    </div>
+                </div>
+            </div>
+
+            <div className="stat-card">
+                <div className="stat-icon">
+                    <Settings size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Ostatnie zdarzenia</div>
+                    <div className="stat-value">
+                        {stats ? stats.recentEventsCount : "—"}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+)}
                 {view === "admin" && <div className="glass-card">Administracja</div>}
             </main>
             <Toaster
