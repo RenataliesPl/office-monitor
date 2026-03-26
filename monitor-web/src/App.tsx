@@ -16,7 +16,19 @@ import {
 
 import toast, { Toaster } from "react-hot-toast";
 
+import {
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    Tooltip,
+    CartesianGrid,
+    ResponsiveContainer
+} from "recharts";
+
 const API_BASE = "http://localhost:8080";
+
+
 
 export interface Status {
     id: string;
@@ -32,6 +44,12 @@ export interface EventItem {
     payload?: string;
     timestamp?: string;
 }
+export interface Stats {
+    totalEvents: number;
+    eventsLast24h: number;
+    totalDevices: number;
+    recentEventsCount: number;
+}
 
 type View = "panel" | "events" | "stats" | "admin";
 
@@ -40,11 +58,12 @@ const App: React.FC = () => {
 
     const [statusList, setStatusList] = useState<Status[]>([]);
     const [events, setEvents] = useState<EventItem[]>([]);
+    const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdate, setLastUpdate] = useState<string | null>(null);
     const [connected, setConnected] = useState<boolean>(false);
-
+    const [selectedEventType, setSelectedEventType] = useState<string | null>(null);
     const stompClientRef = useRef<Client | null>(null);
 
     type CameraId = "room1" | "room2" | "room3" | "room4";
@@ -62,16 +81,19 @@ const App: React.FC = () => {
                 setLoading(true);
                 setError(null);
 
-                const [statusRes, eventsRes] = await Promise.all([
-                    fetch(`${API_BASE}/api/status`),
-                    fetch(`${API_BASE}/api/events`)
+                const [statusRes, eventsRes, statsRes] = await Promise.all([
+                fetch(`${API_BASE}/api/status`),
+                fetch(`${API_BASE}/api/events`),
+                fetch(`${API_BASE}/api/stats`)
                 ]);
 
                 const statusJson: Status[] = await statusRes.json();
                 const eventsJson: EventItem[] = await eventsRes.json();
+                const statsJson: Stats = await statsRes.json();
 
                 setStatusList(statusJson);
                 setEvents(eventsJson);
+                setStats(statsJson);
                 setLastUpdate(new Date().toLocaleTimeString());
             } catch (e) {
                 if (e instanceof Error) setError(e.message);
@@ -113,7 +135,19 @@ const App: React.FC = () => {
             client.subscribe("/topic/alerts", (msg: IMessage) => {
                 const body = JSON.parse(msg.body) as EventItem;
 
-                setEvents((prev) => [body, ...prev].slice(0, 50));
+                setEvents((prev) => {
+                    const updated = [body, ...prev].slice(0, 1000);
+
+                setStats({
+                        totalEvents: updated.length,
+                        eventsLast24h: updated.length,
+                        totalDevices: statusList.length || 1,
+                        recentEventsCount: updated.length
+                    });
+
+                    return updated;
+                });
+
                 setLastUpdate(new Date().toLocaleTimeString());
 
                 handleCameraForEvent(body);
@@ -133,6 +167,68 @@ const App: React.FC = () => {
     }, []);
 
     const mainStatus: Status | undefined = statusList[0];
+
+             const grouped = events.reduce((acc: Record<string, number>, e) => {
+                if (!e.timestamp) return acc;
+
+                const time = e.timestamp.split("T")[1]?.substring(0, 5); // HH:mm  
+
+                if (!time) return acc;
+
+                acc[time] = (acc[time] || 0) + 1;
+
+                return acc;
+            }, {});
+
+            const chartData = Object.entries(grouped)
+    .map(([time, count]) => ({
+        name: time,
+        value: count
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+const filteredGrouped = events.reduce((acc: Record<string, number>, e) => {
+    if (!e.timestamp) return acc;
+    if (!selectedEventType) return acc;
+
+    const type = (e.type || "").toUpperCase();
+    if (type !== selectedEventType) return acc;
+
+    const time = e.timestamp.split("T")[1]?.substring(0, 5);
+    if (!time) return acc;
+
+    acc[time] = (acc[time] || 0) + 1;
+    return acc;
+}, {});
+
+const filteredChartData = Object.entries(filteredGrouped)
+    .map(([time, count]) => ({
+        name: time,
+        value: count
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+
+            const eventTypeStats = events.reduce(
+                (acc, e) => {
+            const type = (e.type || "").toUpperCase();
+
+                if (type === "OPEN") acc.open += 1;
+                else if (type === "CLOSED") acc.closed += 1;
+                else if (type === "MOTION") acc.motion += 1;
+                else if (type === "CLEAR") acc.clear += 1;
+
+                return acc;
+            },
+            { open: 0, closed: 0, motion: 0, clear: 0 }
+            );
+
+            const eventColors: Record<string, string> = {
+    OPEN: "#22c55e",
+    CLOSED: "#ef4444",
+    MOTION: "#f59e0b",
+    CLEAR: "#94a3b8"
+};
 
     const formatTemp = (t: number | null | undefined): string =>
         t != null ? `${t.toFixed(1)} °C` : "—";
@@ -413,7 +509,211 @@ const App: React.FC = () => {
 
                 {view === "panel" && renderDashboard()}
                 {view === "events" && renderEvents()}
-                {view === "stats" && <div className="glass-card">Statystyki</div>}
+                {view === "stats" && (
+    <div className="glass-card">
+        <div className="card-title">Statystyki systemu</div>
+
+        <div className="stats-grid" style={{ marginTop: "20px" }}>
+            <div className="stat-card">
+                <div className="stat-icon">
+                    <Bell size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Wszystkie zdarzenia</div>
+                    <div className="stat-value">
+                        {stats ? stats.totalEvents : "—"}
+                    </div>
+                </div>
+            </div>
+
+            <div className="stat-card">
+                <div className="stat-icon">
+                    <BarChart3 size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Zdarzenia 24h</div>
+                    <div className="stat-value">
+                        {stats ? stats.eventsLast24h : "—"}
+                    </div>
+                </div>
+            </div>
+
+            <div className="stat-card">
+                <div className="stat-icon">
+                    <Activity size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Urządzenia</div>
+                    <div className="stat-value">
+                        {stats ? stats.totalDevices : "—"}
+                    </div>
+                </div>
+            </div>
+
+            <div className="stat-card">
+                <div className="stat-icon">
+                    <Settings size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Ostatnie zdarzenia</div>
+                    <div className="stat-value">
+                        {stats ? stats.recentEventsCount : "—"}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style={{ width: "100%", height: 360, marginTop: 30 }}>
+            <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 10, right: 20, left: 30, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+    dataKey="name"
+    tick={{ fontSize: 12 }}
+    tickMargin={10}
+/>
+<YAxis
+    width={60}
+    domain={[0, 'auto']}
+    tick={{ fill: "#94a3b8", fontSize: 12 }}
+    axisLine={false}
+    tickLine={false}
+/>
+      <YAxis />             
+                    <Tooltip
+    formatter={(value, name) => [
+        `${value} zdarzeń`,
+        name === "Wszystkie zdarzenia"
+            ? "Wszystkie zdarzenia"
+            : selectedEventType
+    ]}
+/>
+
+                    <Line
+    type="monotone"
+    dataKey="value"
+    stroke="#6366f1"
+    strokeWidth={3}
+    dot={false}
+    activeDot={{ r: 6 }}
+    name="Wszystkie zdarzenia"
+/>
+
+                    {selectedEventType && (
+                        <Line
+    type="monotone"
+    data={filteredChartData}
+    dataKey="value"
+    stroke={selectedEventType ? eventColors[selectedEventType] : "#f59e0b"}
+    strokeWidth={4}
+    dot={false}
+    activeDot={{ r: 7 }}
+    name={selectedEventType}
+/>
+                    )}
+                </LineChart>
+            </ResponsiveContainer>
+        </div>
+
+        <div className="stats-grid" style={{ marginTop: 30 }}>
+            <div
+                className="stat-card"
+                onClick={() =>
+                    setSelectedEventType(
+                        selectedEventType === "OPEN" ? null : "OPEN"
+                    )
+                }
+                style={{
+                    cursor: "pointer",
+                    border:
+                        selectedEventType === "OPEN"
+                            ? "2px solid #6366f1"
+                            : undefined
+                }}
+            >
+                <div className="stat-icon">
+                    <Bell size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Otwarcia</div>
+                    <div className="stat-value">{eventTypeStats.open}</div>
+                </div>
+            </div>
+
+            <div
+                className="stat-card"
+                onClick={() =>
+                    setSelectedEventType(
+                        selectedEventType === "CLOSED" ? null : "CLOSED"
+                    )
+                }
+                style={{
+                    cursor: "pointer",
+                    border:
+                        selectedEventType === "CLOSED"
+                            ? "2px solid #6366f1"
+                            : undefined
+                }}
+            >
+                <div className="stat-icon">
+                    <Bell size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Zamknięcia</div>
+                    <div className="stat-value">{eventTypeStats.closed}</div>
+                </div>
+            </div>
+
+            <div
+                className="stat-card"
+                onClick={() =>
+                    setSelectedEventType(
+                        selectedEventType === "Ruch" ? null : "Ruch"
+                    )
+                }
+                style={{
+                    cursor: "pointer",
+                    border:
+                        selectedEventType === "Ruch"
+                            ? "2px solid #6366f1"
+                            : undefined
+                }}
+            >
+                <div className="stat-icon">
+                    <Bell size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Ruch</div>
+                    <div className="stat-value">{eventTypeStats.motion}</div>
+                </div>
+            </div>
+
+            <div
+                className="stat-card"
+                onClick={() =>
+                    setSelectedEventType(
+                        selectedEventType === "CLEAR" ? null : "CLEAR"
+                    )
+                }
+                style={{
+                    cursor: "pointer",
+                    border:
+                        selectedEventType === "CLEAR"
+                            ? "2px solid #6366f1"
+                            : undefined
+                }}
+            >
+                <div className="stat-icon">
+                    <Bell size={20} />
+                </div>
+                <div>
+                    <div className="stat-label">Clear</div>
+                    <div className="stat-value">{eventTypeStats.clear}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+)}
                 {view === "admin" && <div className="glass-card">Administracja</div>}
             </main>
             <Toaster
